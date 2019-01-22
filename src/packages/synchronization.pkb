@@ -155,8 +155,11 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
         
         WHILE TRUE LOOP
         
+            -- This is waiting for any request from the BEFORE_DDL to start a (root) DDL
             v_pipe_result := DBMS_PIPE.RECEIVE_MESSAGE(c_NOTIFICATION_PIPE_NAME);
             
+            -- Message will contain DDL executor transaction ID. Two unique pipes
+            -- are used to communicate between the job and DDL executor sessions.
             DBMS_PIPE.UNPACK_MESSAGE(v_transaction_id);
             v_in_pipe_name := v_transaction_id || '$GENERATION$IN$PIPE';
             v_out_pipe_name := v_transaction_id || '$GENERATION$OUT$PIPE';
@@ -180,6 +183,14 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
             
             IF v_pipe_result = 0 THEN
                 
+                -- This is to disable synchronization and generation for
+                -- DDLs being executed by the generators themselves.                
+                v_lock_name := 'SESSION$' || c_SESSION_SERIAL# || '$DDL$LOCK';
+                v_lock_result := DBMS_LOCK.REQUEST(
+                    lockhandle => get_lock_handle(v_lock_name),
+                    release_on_commit => TRUE
+                );
+            
                 CASE v_event
                     WHEN 'CREATE' THEN
                         generation.create_object(v_type, v_owner, v_name);
