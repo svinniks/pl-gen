@@ -29,6 +29,8 @@ CREATE OR REPLACE PACKAGE BODY generation IS
     PROCEDURE enable (
         p_synchronize_ddl IN BOOLEANN
     ) IS
+        e_job_exists EXCEPTION;
+        PRAGMA EXCEPTION_INIT(e_job_exists, -27477);
     BEGIN
         
         DBMS_SESSION.SET_CONTEXT(
@@ -37,29 +39,41 @@ CREATE OR REPLACE PACKAGE BODY generation IS
             iif(p_synchronize_ddl, 'TRUE', 'FALSE')
         );
     
-        DBMS_SCHEDULER.CREATE_JOB(
-            job_name => 'GENERATOR_EXECUTOR_JOB',
-            job_type => 'PLSQL_BLOCK',
-            job_action => 'BEGIN synchronization.job; END;',
-            repeat_interval => 'FREQ=SECONDLY;INTERVAL=1',
-            enabled => TRUE
-        );
-        
         EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl ENABLE';
         EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl ENABLE';
+    
+        BEGIN
+            DBMS_SCHEDULER.CREATE_JOB(
+                job_name => 'GENERATOR_EXECUTOR_JOB',
+                job_type => 'PLSQL_BLOCK',
+                job_action => 'BEGIN synchronization.job; END;',
+                repeat_interval => 'FREQ=SECONDLY;INTERVAL=1',
+                enabled => TRUE
+            );
+        EXCEPTION
+            WHEN e_job_exists THEN
+                NULL;
+        END;
         
     END;
     
     PROCEDURE disable IS
+        e_job_not_exists EXCEPTION;
+        PRAGMA EXCEPTION_INIT(e_job_not_exists, -27475);    
     BEGIN
         
+        BEGIN
+            DBMS_SCHEDULER.DROP_JOB(
+                job_name => 'GENERATOR_EXECUTOR_JOB',
+                force => TRUE
+            );
+        EXCEPTION
+            WHEN e_job_not_exists THEN
+                NULL;
+        END;
+    
         EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl DISABLE';
         EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl DISABLE';
-        
-        DBMS_SCHEDULER.DROP_JOB(
-            job_name => 'GENERATOR_EXECUTOR_JOB',
-            force => TRUE
-        );
     
     END;
     
@@ -335,6 +349,32 @@ CREATE OR REPLACE PACKAGE BODY generation IS
             
             BEGIN
                 v_generators(v_i).on_drop_object(p_type, p_owner, p_name);
+            EXCEPTION
+                WHEN OTHERS THEN
+                    error$.handle;
+            END;
+            
+            COMMIT;
+        
+        END LOOP;
+    
+    END;
+    
+    PROCEDURE comment_object (
+        p_type IN STRINGN,
+        p_owner IN STRINGN,
+        p_name IN STRINGN
+    ) IS
+        v_generators t_generators;
+        PRAGMA AUTONOMOUS_TRANSACTION;
+    BEGIN
+        
+        v_generators := object_generators(p_type, p_owner, p_name);
+        
+        FOR v_i IN 1..v_generators.COUNT LOOP
+            
+            BEGIN
+                v_generators(v_i).on_comment_object(p_type, p_owner, p_name);
             EXCEPTION
                 WHEN OTHERS THEN
                     error$.handle;

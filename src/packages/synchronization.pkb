@@ -60,7 +60,8 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
         p_event IN VARCHAR2,
         p_type IN VARCHAR2,
         p_owner IN VARCHAR2,
-        p_name IN VARCHAR2
+        p_name IN VARCHAR2,
+        p_column IN VARCHAR2
     ) IS
     
         v_transaction_id STRING;
@@ -106,7 +107,8 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
         p_event IN VARCHAR2,
         p_type IN VARCHAR2,
         p_owner IN VARCHAR2,
-        p_name IN VARCHAR2
+        p_name IN VARCHAR2,
+        p_column IN VARCHAR2
     ) IS
     
         v_transaction_id STRING;
@@ -198,6 +200,8 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
                         generation.alter_object(v_type, v_owner, v_name);
                     WHEN 'DROP' THEN
                         generation.drop_object(v_type, v_owner, v_name);
+                    WHEN 'COMMENT' THEN
+                        generation.comment_object(v_type, v_owner, v_name);
                     ELSE
                         NULL;
                 END CASE;

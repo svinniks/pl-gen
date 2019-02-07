@@ -99,6 +99,12 @@ CREATE OR REPLACE PACKAGE generation IS
         p_name IN STRINGN
     );
     
+    PROCEDURE comment_object (
+        p_type IN STRINGN,
+        p_owner IN STRINGN,
+        p_name IN STRINGN
+    );
+    
     FUNCTION dump
     RETURN t_generator_registrations;
 

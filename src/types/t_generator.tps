@@ -1,4 +1,4 @@
-CREATE OR REPLACE TYPE t_generator AUTHID CURRENT_USER IS OBJECT (
+CREATE OR REPLACE TYPE t_generator IS OBJECT (
 
     dummy CHAR,
     
@@ -18,6 +18,12 @@ CREATE OR REPLACE TYPE t_generator AUTHID CURRENT_USER IS OBJECT (
     ),
     
     NOT INSTANTIABLE MEMBER PROCEDURE on_drop_object (
+        p_type IN VARCHAR2,
+        p_owner IN VARCHAR2,
+        p_name IN VARCHAR2
+    ),
+    
+    NOT INSTANTIABLE MEMBER PROCEDURE on_comment_object (
         p_type IN VARCHAR2,
         p_owner IN VARCHAR2,
         p_name IN VARCHAR2
