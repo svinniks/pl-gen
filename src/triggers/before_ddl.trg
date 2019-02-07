@@ -3,6 +3,10 @@ BEFORE CREATE OR ALTER OR DROP OR COMMENT ON DATABASE
 DISABLE
 BEGIN
 
+    IF ora_dict_obj_owner = $$PLSQL_UNIT_OWNER THEN
+        RETURN;
+    END IF;
+
     log$.debug(
         'BEFORE #1 #2 #3.#4 (transaction #5)',
         ora_sysevent,
