@@ -7,16 +7,14 @@ CREATE OR REPLACE PACKAGE synchronization IS
         p_event IN VARCHAR2,
         p_type IN VARCHAR2,
         p_owner IN VARCHAR2,
-        p_name IN VARCHAR2,
-        p_column IN VARCHAR2
+        p_name IN VARCHAR2
     );
     
     PROCEDURE ddl_success (
         p_event IN VARCHAR2,
         p_type IN VARCHAR2,
         p_owner IN VARCHAR2,
-        p_name IN VARCHAR2,
-        p_column IN VARCHAR2
+        p_name IN VARCHAR2
     ); 
     
     PROCEDURE job;

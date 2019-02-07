@@ -20,8 +20,7 @@ BEGIN
         ora_sysevent,
         ora_dict_obj_type,
         ora_dict_obj_owner,
-        ora_dict_obj_name,
-        NULL
+        ora_dict_obj_name
     );
 
 END;
