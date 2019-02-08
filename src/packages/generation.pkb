@@ -34,7 +34,7 @@ CREATE OR REPLACE PACKAGE BODY generation IS
     BEGIN
         
         DBMS_SESSION.SET_CONTEXT(
-            'GENERATION_CONTEXT', 
+            'GENERATION_GLOBAL', 
             'SYNCHRONIZE_DDL', 
             iif(p_synchronize_ddl, 'TRUE', 'FALSE')
         );
@@ -76,13 +76,7 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl DISABLE';
     
     END;
-    
-    FUNCTION enabled
-    RETURN BOOLEAN IS
-    BEGIN
-        NULL;
-    END;
-    
+        
     PROCEDURE reset IS
     BEGIN
         v_generator_registrations := t_generator_registrations();
@@ -282,21 +276,47 @@ CREATE OR REPLACE PACKAGE BODY generation IS
     
     END;
     
-    PROCEDURE create_object (
-        p_type IN STRINGN,
-        p_owner IN STRINGN,
-        p_name IN STRINGN
-    ) IS
+    PROCEDURE ddl_event (
+        p_event IN VARCHAR2,
+        p_object_type IN STRINGN,
+        p_object_owner IN STRINGN,
+        p_object_name IN STRINGN,
+        p_user IN VARCHAR2 := USER,
+        p_session_id IN NUMBER := SYS_CONTEXT('USERENV', 'SID'),
+        p_session_serial# IN NUMBER := synchronization.c_SESSION_SERIAL#,
+        p_transaction_id IN VARCHAR2 := DBMS_TRANSACTION.LOCAL_TRANSACTION_ID
+    )
+    ACCESSIBLE BY (PACKAGE synchronization) IS
         v_generators t_generators;
         PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        
-        v_generators := object_generators(p_type, p_owner, p_name);
+    
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'EVENT', p_event);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'OBJECT_TYPE', p_object_type);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'OBJECT_OWNER', p_object_owner);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'OBJECT_NAME', p_object_name);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'USER', p_user);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'SESSION_ID', p_session_id);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'SESSION_SERIAL#', p_session_serial#);
+        DBMS_SESSION.SET_CONTEXT('GENERATION', 'TRANSACTION_ID', p_transaction_id);
+    
+        v_generators := object_generators(p_object_type, p_object_owner, p_object_name);
         
         FOR v_i IN 1..v_generators.COUNT LOOP
         
             BEGIN
-                v_generators(v_i).on_create_object(p_type, p_owner, p_name);
+            
+                CASE p_event
+                    WHEN 'CREATE' THEN 
+                        v_generators(v_i).on_create_object(p_object_type, p_object_owner, p_object_name);
+                    WHEN 'ALTER' THEN
+                        v_generators(v_i).on_alter_object(p_object_type, p_object_owner, p_object_name);
+                    WHEN 'DROP' THEN
+                        v_generators(v_i).on_drop_object(p_object_type, p_object_owner, p_object_name);
+                    WHEN 'COMMENT' THEN
+                        v_generators(v_i).on_comment_object(p_object_type, p_object_owner, p_object_name);
+                END CASE;
+                
             EXCEPTION
                 WHEN OTHERS THEN
                     error$.handle;
@@ -306,6 +326,15 @@ CREATE OR REPLACE PACKAGE BODY generation IS
             
         END LOOP;
     
+    END;
+    
+    PROCEDURE create_object (
+        p_type IN STRINGN,
+        p_owner IN STRINGN,
+        p_name IN STRINGN
+    ) IS
+    BEGIN
+        ddl_event('CREATE', p_type, p_owner, p_name);
     END;
     
     PROCEDURE alter_object (
@@ -313,25 +342,8 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         p_owner IN STRINGN,
         p_name IN STRINGN
     ) IS
-        v_generators t_generators;
-        PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        
-        v_generators := object_generators(p_type, p_owner, p_name);
-        
-        FOR v_i IN 1..v_generators.COUNT LOOP
-            
-            BEGIN
-                v_generators(v_i).on_alter_object(p_type, p_owner, p_name);
-            EXCEPTION
-                WHEN OTHERS THEN
-                    error$.handle;
-            END;
-            
-            COMMIT;
-        
-        END LOOP;
-    
+        ddl_event('ALTER', p_type, p_owner, p_name);
     END;
     
     PROCEDURE drop_object (
@@ -339,25 +351,8 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         p_owner IN STRINGN,
         p_name IN STRINGN
     ) IS
-        v_generators t_generators;
-        PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        
-        v_generators := object_generators(p_type, p_owner, p_name);
-        
-        FOR v_i IN 1..v_generators.COUNT LOOP
-            
-            BEGIN
-                v_generators(v_i).on_drop_object(p_type, p_owner, p_name);
-            EXCEPTION
-                WHEN OTHERS THEN
-                    error$.handle;
-            END;
-            
-            COMMIT;
-        
-        END LOOP;
-    
+        ddl_event('DROP', p_type, p_owner, p_name);
     END;
     
     PROCEDURE comment_object (
@@ -365,25 +360,8 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         p_owner IN STRINGN,
         p_name IN STRINGN
     ) IS
-        v_generators t_generators;
-        PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN
-        
-        v_generators := object_generators(p_type, p_owner, p_name);
-        
-        FOR v_i IN 1..v_generators.COUNT LOOP
-            
-            BEGIN
-                v_generators(v_i).on_comment_object(p_type, p_owner, p_name);
-            EXCEPTION
-                WHEN OTHERS THEN
-                    error$.handle;
-            END;
-            
-            COMMIT;
-        
-        END LOOP;
-    
+        ddl_event('COMMENT', p_type, p_owner, p_name);
     END;
     
     FUNCTION dump

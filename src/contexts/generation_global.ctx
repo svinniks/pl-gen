@@ -14,7 +14,7 @@
     limitations under the License.
 */
 
-CREATE OR REPLACE CONTEXT generation_context 
+CREATE OR REPLACE CONTEXT generation_global 
     USING generation 
     ACCESSED GLOBALLY
     

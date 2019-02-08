@@ -40,9 +40,6 @@ CREATE OR REPLACE PACKAGE generation IS
     
     PROCEDURE disable;
     
-    FUNCTION enabled
-    RETURN BOOLEAN;
-    
     PROCEDURE reset;
     
     FUNCTION register_generator (
@@ -80,6 +77,18 @@ CREATE OR REPLACE PACKAGE generation IS
         p_name IN STRINGN
     )
     RETURN t_generators;
+    
+    PROCEDURE ddl_event (
+        p_event IN VARCHAR2,
+        p_object_type IN STRINGN,
+        p_object_owner IN STRINGN,
+        p_object_name IN STRINGN,
+        p_user IN VARCHAR2 := USER,
+        p_session_id IN NUMBER := SYS_CONTEXT('USERENV', 'SID'),
+        p_session_serial# IN NUMBER := synchronization.c_SESSION_SERIAL#,
+        p_transaction_id IN VARCHAR2 := DBMS_TRANSACTION.LOCAL_TRANSACTION_ID
+    )
+    ACCESSIBLE BY (PACKAGE synchronization);    
     
     PROCEDURE create_object (
         p_type IN STRINGN,

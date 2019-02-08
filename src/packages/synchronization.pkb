@@ -1,7 +1,6 @@
 CREATE OR REPLACE PACKAGE BODY synchronization IS
 
     c_NOTIFICATION_PIPE_NAME CONSTANT STRING := 'GENERATION$NOTIFICATION$PIPE';
-    c_SESSION_SERIAL# CONSTANT NUMBER := DBMS_DEBUG_JDWP.CURRENT_SESSION_SERIAL;
     
     v_ddl_signature STRING;
 
@@ -41,7 +40,7 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     FUNCTION synchronize_ddl
     RETURN BOOLEAN IS
     BEGIN
-        RETURN NVL(SYS_CONTEXT('GENERATION_CONTEXT', 'SYNCHRONIZE_DDL'), 'FALSE') = 'TRUE';
+        RETURN NVL(SYS_CONTEXT('GENERATION_GLOBAL', 'SYNCHRONIZE_DDL'), 'FALSE') = 'TRUE';
     END;
     
     FUNCTION ddl_signature (
@@ -86,11 +85,14 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
                 release_on_commit => TRUE
             );
         
-            DBMS_PIPE.PACK_MESSAGE(v_transaction_id);
             DBMS_PIPE.PACK_MESSAGE(p_event);
             DBMS_PIPE.PACK_MESSAGE(p_type);
             DBMS_PIPE.PACK_MESSAGE(p_owner);
             DBMS_PIPE.PACK_MESSAGE(p_name);
+            DBMS_PIPE.PACK_MESSAGE(USER);
+            DBMS_PIPE.PACK_MESSAGE(TO_NUMBER(SYS_CONTEXT('USERENV', 'SID')));
+            DBMS_PIPE.PACK_MESSAGE(c_SESSION_SERIAL#);
+            DBMS_PIPE.PACK_MESSAGE(v_transaction_id);
             
             v_pipe_result := DBMS_PIPE.SEND_MESSAGE(c_NOTIFICATION_PIPE_NAME);
         
@@ -129,14 +131,17 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     
         v_pipe_result INTEGER;
         
-        v_transaction_id STRING;
-        v_in_pipe_name STRING;
-        v_out_pipe_name STRING;
-        
         v_event STRING;
         v_type STRING;
         v_owner STRING;
         v_name STRING;
+        v_user STRING;
+        v_session_id NUMBER;
+        v_session_serial# NUMBER;
+        v_transaction_id STRING;
+
+        v_in_pipe_name STRING;
+        v_out_pipe_name STRING;
         
         v_lock_name STRING;
         v_lock_result INTEGER;
@@ -158,16 +163,19 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
             -- This is waiting for any request from the BEFORE_DDL to start a (root) DDL
             v_pipe_result := DBMS_PIPE.RECEIVE_MESSAGE(c_NOTIFICATION_PIPE_NAME);
             
-            -- Message will contain DDL executor transaction ID. Two unique pipes
-            -- are used to communicate between the job and DDL executor sessions.
-            DBMS_PIPE.UNPACK_MESSAGE(v_transaction_id);
-            v_in_pipe_name := v_transaction_id || '$GENERATION$IN$PIPE';
-            v_out_pipe_name := v_transaction_id || '$GENERATION$OUT$PIPE';
-            
             DBMS_PIPE.UNPACK_MESSAGE(v_event);
             DBMS_PIPE.UNPACK_MESSAGE(v_type);
             DBMS_PIPE.UNPACK_MESSAGE(v_owner);
             DBMS_PIPE.UNPACK_MESSAGE(v_name);
+            DBMS_PIPE.UNPACK_MESSAGE(v_user);
+            DBMS_PIPE.UNPACK_MESSAGE(v_session_id);
+            DBMS_PIPE.UNPACK_MESSAGE(v_session_serial#);
+            DBMS_PIPE.UNPACK_MESSAGE(v_transaction_id);
+            
+            -- Message will contain DDL executor transaction ID. Two unique pipes
+            -- are used to communicate between the job and DDL executor sessions.
+            v_in_pipe_name := v_transaction_id || '$GENERATION$IN$PIPE';
+            v_out_pipe_name := v_transaction_id || '$GENERATION$OUT$PIPE';
             
             IF synchronize_ddl THEN
                 v_pipe_result := DBMS_PIPE.SEND_MESSAGE(v_in_pipe_name);
@@ -190,19 +198,17 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
                     lockhandle => get_lock_handle(v_lock_name),
                     release_on_commit => TRUE
                 );
-            
-                CASE v_event
-                    WHEN 'CREATE' THEN
-                        generation.create_object(v_type, v_owner, v_name);
-                    WHEN 'ALTER' THEN
-                        generation.alter_object(v_type, v_owner, v_name);
-                    WHEN 'DROP' THEN
-                        generation.drop_object(v_type, v_owner, v_name);
-                    WHEN 'COMMENT' THEN
-                        generation.comment_object(v_type, v_owner, v_name);
-                    ELSE
-                        NULL;
-                END CASE;
+                
+                generation.ddl_event(
+                    v_event,
+                    v_type,
+                    v_owner,
+                    v_name,
+                    v_user,
+                    v_session_id,
+                    v_session_serial#,
+                    v_transaction_id
+                );
             
                 COMMIT;
             
