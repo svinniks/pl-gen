@@ -285,8 +285,7 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         p_session_id IN NUMBER := SYS_CONTEXT('USERENV', 'SID'),
         p_session_serial# IN NUMBER := synchronization.c_SESSION_SERIAL#,
         p_transaction_id IN VARCHAR2 := DBMS_TRANSACTION.LOCAL_TRANSACTION_ID
-    )
-    ACCESSIBLE BY (PACKAGE synchronization) IS
+    ) IS
         v_generators t_generators;
         PRAGMA AUTONOMOUS_TRANSACTION;
     BEGIN

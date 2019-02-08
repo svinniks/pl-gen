@@ -87,8 +87,7 @@ CREATE OR REPLACE PACKAGE generation IS
         p_session_id IN NUMBER := SYS_CONTEXT('USERENV', 'SID'),
         p_session_serial# IN NUMBER := synchronization.c_SESSION_SERIAL#,
         p_transaction_id IN VARCHAR2 := DBMS_TRANSACTION.LOCAL_TRANSACTION_ID
-    )
-    ACCESSIBLE BY (PACKAGE synchronization);    
+    );    
     
     PROCEDURE create_object (
         p_type IN STRINGN,
