@@ -7,15 +7,6 @@ BEGIN
         RETURN;
     END IF;
 
-    log$.debug(
-        'BEFORE #1 #2 #3.#4 (transaction #5)',
-        ora_sysevent,
-        ora_dict_obj_type,
-        ora_dict_obj_owner,
-        ora_dict_obj_name,
-        DBMS_TRANSACTION.LOCAL_TRANSACTION_ID
-    );
-
     synchronization.ddl_start(
         ora_sysevent,
         ora_dict_obj_type,
