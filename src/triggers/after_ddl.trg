@@ -27,7 +27,10 @@ BEGIN
         ora_dict_obj_owner,
         ora_dict_obj_name
     );
-
+    
+EXCEPTION
+    WHEN OTHERS THEN    
+        error$.handle;
 END;
 /
 
