@@ -30,7 +30,11 @@ BEGIN
     
 EXCEPTION
     WHEN OTHERS THEN    
-        error$.handle;    
+        IF NOT error$.handled THEN
+            error$.handle;
+        ELSE
+            RAISE;
+        END IF;    
 END;
 /
 

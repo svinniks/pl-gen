@@ -4,6 +4,22 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     
     v_ddl_signature STRING;
 
+    FUNCTION iif (
+        p_condition IN BOOLEAN,
+        p_value_if_true IN VARCHAR2,
+        p_value_if_false IN VARCHAR2
+    )
+    RETURN VARCHAR2 IS
+    BEGIN
+    
+        IF p_condition THEN
+            RETURN p_value_if_true;
+        ELSE
+            RETURN p_value_if_false;
+        END IF;
+        
+    END;
+
     FUNCTION get_lock_handle (
         p_lock_name IN VARCHAR2
     ) 
@@ -41,6 +57,12 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     RETURN BOOLEAN IS
     BEGIN
         RETURN NVL(SYS_CONTEXT('GENERATION_GLOBAL', 'SYNCHRONIZE_DDL'), 'FALSE') = 'TRUE';
+    END;
+    
+    FUNCTION synchronization_timeout
+    RETURN INTEGER IS
+    BEGIN
+        RETURN NVL(SYS_CONTEXT('GENERATION_GLOBAL', 'SYNCHRONIZATION_TIMEOUT'), DBMS_PIPE.MAXWAIT);
     END;
     
     FUNCTION ddl_signature (
@@ -97,7 +119,13 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
             v_pipe_result := DBMS_PIPE.SEND_MESSAGE(c_NOTIFICATION_PIPE_NAME);
         
             IF synchronize_ddl THEN
-                v_pipe_result := DBMS_PIPE.RECEIVE_MESSAGE(v_in_pipe_name);
+            
+                v_pipe_result := DBMS_PIPE.RECEIVE_MESSAGE(v_in_pipe_name, synchronization_timeout);
+                
+                IF v_pipe_result = 1 THEN
+                    error$.raise('Timeout occurred while synchronizing DDL!');
+                END IF;
+                
             END IF;
             
         END IF;
@@ -127,7 +155,10 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     
     END;
         
-    PROCEDURE job IS
+    PROCEDURE job (
+        p_synchronize_ddl IN BOOLEAN,
+        p_synchronization_timeout IN INTEGER
+    ) IS
     
         v_pipe_result INTEGER;
         
@@ -148,15 +179,19 @@ CREATE OR REPLACE PACKAGE BODY synchronization IS
     
     BEGIN
         
-        DBMS_PIPE.PURGE(c_NOTIFICATION_PIPE_NAME);
-        generation.reset;
+        DBMS_SESSION.SET_CONTEXT(
+            'GENERATION_GLOBAL', 
+            'SYNCHRONIZE_DDL', 
+            iif(p_synchronize_ddl, 'TRUE', 'FALSE')
+        );
         
-        BEGIN
-            EXECUTE IMMEDIATE 'BEGIN generation_init; END;';
-        EXCEPTION
-            WHEN OTHERS THEN
-                error$.handle;
-        END;
+        DBMS_SESSION.SET_CONTEXT(
+            'GENERATION_GLOBAL', 
+            'SYNCHRONIZATION_TIMEOUT', 
+            p_synchronization_timeout
+        );
+    
+        DBMS_PIPE.PURGE(c_NOTIFICATION_PIPE_NAME);
         
         WHILE TRUE LOOP
         

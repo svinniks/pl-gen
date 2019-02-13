@@ -15,7 +15,7 @@
 */
 
 CREATE OR REPLACE CONTEXT generation_global 
-    USING generation 
+    USING synchronization 
     ACCESSED GLOBALLY
     
     

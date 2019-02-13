@@ -19,6 +19,9 @@ CREATE OR REPLACE PACKAGE synchronization IS
         p_name IN VARCHAR2
     ); 
     
-    PROCEDURE job;
+    PROCEDURE job (
+        p_synchronize_ddl IN BOOLEAN,
+        p_synchronization_timeout IN INTEGER
+    );
 
 END;

@@ -11,6 +11,11 @@ CREATE OR REPLACE PACKAGE generation IS
         BOOLEAN
             NOT NULL;
             
+    SUBTYPE t_timeout IS
+        PLS_INTEGER
+            RANGE 0..86400000
+            NOT NULL;
+            
     TYPE t_object_filter IS
         RECORD (
             operation CHAR,
@@ -35,7 +40,8 @@ CREATE OR REPLACE PACKAGE generation IS
         TABLE OF t_generator_registration;
     
     PROCEDURE enable (
-        p_synchronize_ddl IN BOOLEANN
+        p_synchronize_ddl IN BOOLEANN := TRUE,
+        p_synchronization_timeout IN t_timeout := 20
     );
     
     PROCEDURE disable;

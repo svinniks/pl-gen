@@ -10,43 +10,38 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         default_message_resolver.register_message('PGEN-00004', 'Schema not specified!');
     END;
     
-    FUNCTION iif (
-        p_condition IN BOOLEAN,
-        p_value_if_true IN VARCHAR2,
-        p_value_if_false IN VARCHAR2
-    )
-    RETURN VARCHAR2 IS
-    BEGIN
-    
-        IF p_condition THEN
-            RETURN p_value_if_true;
-        ELSE
-            RETURN p_value_if_false;
-        END IF;
-        
-    END;
-    
     PROCEDURE enable (
-        p_synchronize_ddl IN BOOLEANN
+        p_synchronize_ddl IN BOOLEANN := TRUE,
+        p_synchronization_timeout IN t_timeout := 20
     ) IS
+    
         e_job_exists EXCEPTION;
         PRAGMA EXCEPTION_INIT(e_job_exists, -27477);
+        
+        FUNCTION format_job_action 
+        RETURN VARCHAR2 IS
+            v_result STRING;
+        BEGIN
+        
+            v_result := 'BEGIN synchronization.job(';
+            
+            IF p_synchronize_ddl THEN
+                v_result := v_result || 'TRUE';
+            ELSE
+                v_result := v_result || 'FALSE';
+            END IF;
+            
+            RETURN v_result || ', ' || p_synchronization_timeout || '); END;';
+        
+        END;
+        
     BEGIN
         
-        DBMS_SESSION.SET_CONTEXT(
-            'GENERATION_GLOBAL', 
-            'SYNCHRONIZE_DDL', 
-            iif(p_synchronize_ddl, 'TRUE', 'FALSE')
-        );
-    
-        EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl ENABLE';
-        EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl ENABLE';
-    
         BEGIN
             DBMS_SCHEDULER.CREATE_JOB(
                 job_name => 'GENERATOR_EXECUTOR_JOB',
                 job_type => 'PLSQL_BLOCK',
-                job_action => 'BEGIN synchronization.job; END;',
+                job_action => format_job_action,
                 repeat_interval => 'FREQ=SECONDLY;INTERVAL=1',
                 enabled => TRUE
             );
@@ -55,6 +50,9 @@ CREATE OR REPLACE PACKAGE BODY generation IS
                 NULL;
         END;
         
+        EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl ENABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl ENABLE';
+        
     END;
     
     PROCEDURE disable IS
@@ -62,6 +60,9 @@ CREATE OR REPLACE PACKAGE BODY generation IS
         PRAGMA EXCEPTION_INIT(e_job_not_exists, -27475);    
     BEGIN
         
+        EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl DISABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl DISABLE';
+    
         BEGIN
             DBMS_SCHEDULER.DROP_JOB(
                 job_name => 'GENERATOR_EXECUTOR_JOB',
@@ -72,14 +73,25 @@ CREATE OR REPLACE PACKAGE BODY generation IS
                 NULL;
         END;
     
-        EXECUTE IMMEDIATE 'ALTER TRIGGER before_ddl DISABLE';
-        EXECUTE IMMEDIATE 'ALTER TRIGGER after_ddl DISABLE';
-    
     END;
         
     PROCEDURE reset IS
     BEGIN
         v_generator_registrations := t_generator_registrations();
+    END;
+    
+    PROCEDURE init IS
+    BEGIN
+    
+        reset;
+        
+        BEGIN
+            EXECUTE IMMEDIATE 'BEGIN generation_init; END;';
+        EXCEPTION
+            WHEN OTHERS THEN
+                error$.handle;
+        END;    
+    
     END;
     
     FUNCTION register_generator (
@@ -371,5 +383,5 @@ CREATE OR REPLACE PACKAGE BODY generation IS
     
 BEGIN
     register_messages;
-    reset;
+    init;
 END;
